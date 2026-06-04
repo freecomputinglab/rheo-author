@@ -1,0 +1,1 @@
+/nix/store/5xv5qrd0xxj01hkhwwk53n539jb8lfag-home-manager-files/.claude/skills/rheo-author/SKILL.md
