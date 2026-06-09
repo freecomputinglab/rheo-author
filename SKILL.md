@@ -121,12 +121,17 @@ Set `feed_base_url` under `[html]` to enable an Atom 1.0 feed:
 ```toml
 [html]
 feed_base_url = "https://example.com"
+feed_author   = "Jane Doe"            # optional; default "Rheo"
 ```
 
 Without `feed_base_url`, no feed is emitted. When set, the HTML build writes
 `build/html/feed.xml` with one `<entry>` per spine vertebra that declares a
 `rheo-feed-title`, and injects a `<link rel="alternate"
 type="application/atom+xml">` autodiscovery tag into every page's `<head>`.
+
+`feed_author` is an optional string that sets the feed-level `atom:author`
+(`<author><name>…</name></author>`). It defaults to `"Rheo"` when absent;
+XML-special characters are escaped automatically.
 
 Per-entry values are top-level `#let` bindings (string literals) in the
 vertebra:
