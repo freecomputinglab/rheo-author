@@ -146,6 +146,25 @@ vertebra:
 - `rheo-feed-updated` — entry timestamp (RFC 3339); optional, falls back to the
   source file's mtime.
 
+Each entry's `<content>` is chosen from the page, first match wins:
+
+1. the first `<main>` element;
+2. else the first element with class `rheo-feed-content`;
+3. else the whole `<body>`.
+
+To keep site chrome (header, footer, nav) out of feed entries, wrap the article
+in `<main>` and keep the chrome outside it:
+
+```typst
+#show: doc => {
+  site-header()
+  html.elem("main", doc)   // ← only this becomes the feed entry
+  site-footer()
+}
+```
+
+With no `<main>` or `rheo-feed-content` marker, the full body is used.
+
 ## Relative linking between `.typ` files
 
 ```typst
