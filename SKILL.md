@@ -114,6 +114,17 @@ Gotcha: a custom `style.css` **replaces** the default styles entirely — there
 is no merge. Copy the defaults from the rheo repo if you want to extend rather
 than override.
 
+## rheo-* variables
+
+Any top-level `#let rheo-<key> = "<value>"` in a vertebra is harvested at
+compile time and exposed to plugins with the `rheo-` prefix stripped (so
+`rheo-feed-title` is read as `feed-title`). The right-hand side **must** be a
+string literal — a non-string value is a compile error. Bindings nested inside
+closures or code blocks are not file-scope and are ignored.
+
+The Atom feed variables below (`rheo-feed-title`, `rheo-feed-updated`) are an
+instance of this convention.
+
 ## Atom feed (HTML)
 
 Set `feed_base_url` under `[html]` to enable an Atom 1.0 feed:
