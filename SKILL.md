@@ -114,6 +114,33 @@ Gotcha: a custom `style.css` **replaces** the default styles entirely — there
 is no merge. Copy the defaults from the rheo repo if you want to extend rather
 than override.
 
+## Atom feed (HTML)
+
+Set `feed_base_url` under `[html]` to enable an Atom 1.0 feed:
+
+```toml
+[html]
+feed_base_url = "https://example.com"
+```
+
+Without `feed_base_url`, no feed is emitted. When set, the HTML build writes
+`build/html/feed.xml` with one `<entry>` per spine vertebra that declares a
+`rheo-feed-title`, and injects a `<link rel="alternate"
+type="application/atom+xml">` autodiscovery tag into every page's `<head>`.
+
+Per-entry values are top-level `#let` bindings (string literals) in the
+vertebra:
+
+```typst
+#let rheo-feed-title   = "My first post"
+#let rheo-feed-updated = "2026-01-15T00:00:00Z"
+```
+
+- `rheo-feed-title` — entry title; **required** for a vertebra to appear in the
+  feed.
+- `rheo-feed-updated` — entry timestamp (RFC 3339); optional, falls back to the
+  source file's mtime.
+
 ## Relative linking between `.typ` files
 
 ```typst
