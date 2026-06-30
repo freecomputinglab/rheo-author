@@ -202,6 +202,94 @@ Rheo reads `[tool.rheo.html]` from the package's own `typst.toml` and pulls in
 its `js_scripts`, `css_stylesheets`, and `copy` entries automatically. Paths
 there resolve relative to the package's location in the Typst cache.
 
+## Slides (`@rheo/slides`)
+
+The `@rheo/slides` package compiles a single `.typ` file to both a RevealJS HTML presentation and a printable PDF script simultaneously.
+
+### Import
+
+```typst
+#import "@rheo/slides:0.1.0": template, slide
+```
+
+### Defining slides
+
+```typst
+#slide(title: [Introduction])[
+  Content here. Any Typst content: lists, figures, math, citations.
+]
+```
+
+`title` is optional. Omit for a heading-free slide.
+
+### Template
+
+```typst
+#show: template.with(
+  theme: "white",
+  transition: "slide",
+  first-slide: [
+    = My Presentation
+
+    Author Name
+  ],
+)
+```
+
+- `theme` — any built-in RevealJS theme name
+- `transition` — `none`, `fade`, `slide`, `convex`, `concave`, `zoom`
+- `first-slide` — arbitrary Typst content; renders as the opening slide
+
+### Spine config
+
+```toml
+[html.spine]
+vertebrae = ["slides.typ"]
+
+[pdf.spine]
+title = "My Presentation"
+vertebrae = ["slides.typ"]
+```
+
+### PDF output
+
+Each `slide` renders as a headed section on standard paper. `first-slide` becomes a title page. Suitable as a printed script or handout.
+
+### Customising RevealJS CSS
+
+Attach a project CSS file via `[[html.assets]]`:
+
+```toml
+[[html.assets]]
+css_stylesheet = "style.css"
+```
+
+Your stylesheet loads after the package base styles. Key RevealJS CSS variables:
+
+- `--r-main-color` — foreground
+- `--r-background-color` — background
+- `--r-main-font-size` — base font size
+- `--r-heading-color` — headings
+- `--r-link-color` — links
+
+Common overrides:
+
+```css
+/* Title slide heading colour */
+.reveal .slides section:first-child h2 { color: #e7ad52; }
+
+/* Font sizes */
+.reveal .slides > section  { font-size: 0.8em; }
+.reveal .slides blockquote { font-size: 0.9em; }
+.reveal .slides figure     { font-size: 1.5em; }
+.reveal .slides figcaption { font-size: 0.4em; }
+
+/* Theme-agnostic border using CSS variables */
+.reveal .slides figcaption {
+  border-top: 1px solid color-mix(in srgb, var(--r-main-color) 25%, var(--r-background-color));
+}
+```
+
 ## When to hand off to typst-author
 
 Raw Typst markup — show rules, `target()`, figures, math, packages — belongs
