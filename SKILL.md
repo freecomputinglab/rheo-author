@@ -36,7 +36,7 @@ my-project/
 Defaults (applied when keys are omitted):
 
 ```toml
-version = "0.3.0"
+version = "0.5.1"
 content_dir = "./"
 build_dir   = "build"
 formats     = ["pdf", "html", "epub"]
@@ -132,9 +132,26 @@ js_scripts  = "annotations/index.js"
 
 Files land in `dest/` under the HTML output (or HTML root if `dest` is omitted).
 
-Gotcha: a custom `style.css` **replaces** the default styles entirely — there
-is no merge. Copy the defaults from the rheo repo if you want to extend rather
-than override.
+Gotcha: a custom `css_stylesheet` **replaces** the default styles entirely —
+there is no merge. With no user CSS, rheo emits its built-in default as a linked
+asset, `rheo-default.css`, in the HTML output; the moment you set your own
+`css_stylesheet` that file is no longer emitted. To extend rather than override,
+start from `rheo-default.css` and layer your rules on top. Asset `<link>` hrefs
+are depth-relative, so nested pages resolve root-level assets correctly.
+
+## Footnotes (HTML/EPUB)
+
+By default the footnote counter **resets per page** in HTML and EPUB bundle
+output — each page starts its footnotes at 1 rather than continuing across the
+whole spine. Set `reset_footnotes = false` under `[html]` or `[epub]` to keep
+continuous numbering across pages:
+
+```toml
+[html]
+reset_footnotes = false   # continuous across pages (default true = reset per page)
+```
+
+Per-format, so HTML and EPUB can differ. PDF is unaffected.
 
 ## rheo-* variables
 
