@@ -36,7 +36,7 @@ my-project/
 Defaults (applied when keys are omitted):
 
 ```toml
-version = "0.3.0"
+version = "0.5.1"
 content_dir = "./"
 build_dir   = "build"
 formats     = ["pdf", "html", "epub"]
