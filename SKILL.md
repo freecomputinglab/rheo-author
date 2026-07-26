@@ -132,9 +132,12 @@ js_scripts  = "annotations/index.js"
 
 Files land in `dest/` under the HTML output (or HTML root if `dest` is omitted).
 
-Gotcha: a custom `style.css` **replaces** the default styles entirely — there
-is no merge. Copy the defaults from the rheo repo if you want to extend rather
-than override.
+Gotcha: a custom `css_stylesheet` **replaces** the default styles entirely —
+there is no merge. With no user CSS, rheo emits its built-in default as a linked
+asset, `rheo-default.css`, in the HTML output; the moment you set your own
+`css_stylesheet` that file is no longer emitted. To extend rather than override,
+start from `rheo-default.css` and layer your rules on top. Asset `<link>` hrefs
+are depth-relative, so nested pages resolve root-level assets correctly.
 
 ## Footnotes (HTML/EPUB)
 
