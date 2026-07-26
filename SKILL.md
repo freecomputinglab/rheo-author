@@ -42,8 +42,7 @@ build_dir   = "build"
 formats     = ["pdf", "html", "epub"]
 
 [epub.spine]
-vertebrae = ["**/*.typ"]
-title     = "<project dir name>"
+title = "<project dir name>"
 ```
 
 Restrict outputs by trimming `formats`, e.g. `formats = ["html", "epub"]`.
@@ -54,19 +53,42 @@ Once `content_dir` is set, `build_dir` **and all spine globs** resolve relative
 to `content_dir`, not the project root. Asset `copy` paths stay relative to the
 project root. Mix these up and files land in the wrong place.
 
-## Spines — per-format ordering
+## Spines — directory-scan default, exclude, sections
 
-Each format has its own spine: `[pdf.spine]`, `[html.spine]`, `[epub.spine]`.
+With no config, the spine is built from `content_dir`'s own directory
+structure: every `.typ` file, ordered alphabetically per directory level. A
+subdirectory with a landing file (`index.typ`, or `<dirname>.typ`) gets its own
+clickable page; without one it becomes a non-clickable group titled from the
+directory name (a leading numeric prefix like `01-intro/` orders it but is
+stripped from the title only — the raw name, prefix included, stays in the
+handle).
+
+Two knobs reshape this, both under a global `[spine]` table or a per-format
+`[pdf.spine]`/`[html.spine]`/`[epub.spine]` override (per-format overrides are
+field-by-field: an unset field still falls back to the global `[spine]`):
+
+```toml
+[spine]
+exclude = ["drafts/**"]        # globs relative to content_dir, omitted from every format
+
+[[spine.section]]
+name    = "chapters"           # virtual directory, no files moved on disk
+include = ["ch-*.typ"]         # matched files get handle `chapters:<stem>`
+```
+
+`[[spine.section]]` nests via `[[spine.section.section]]`. When `include` lists
+several globs, matches are gathered in glob order (lexicographic within one
+glob) — list globs in the order you want when you need explicit control.
 
 ```toml
 [epub.spine]
-title     = "My Book"
-vertebrae = ["intro.typ", "chapters/*.typ", "outro.typ"]
+title = "My Book"
 ```
 
-Named files preserve order; globs expand lexicographically. The PDF spine
-accepts a `merge` attribute that rewrites cross-`.typ` links as internal
-section references rather than external links.
+PDF combines its spine into a single document by default, rewriting
+cross-`.typ` links as internal section references; HTML and EPUB always
+produce one output per vertebra. There is no `vertebrae` key any more — order
+comes from file/directory naming, `exclude`, and `[[spine.section]]`.
 
 ## Assets
 
@@ -116,14 +138,14 @@ than override.
 
 ## rheo-* variables
 
-Any top-level `#let rheo-<key> = "<value>"` in a vertebra is harvested at
+Any top-level `#let rheo-<key> = <value>` in a vertebra is harvested at
 compile time and exposed to plugins with the `rheo-` prefix stripped (so
 `rheo-feed-title` is read as `feed-title`). The right-hand side **must** be a
-string literal — a non-string value is a compile error. Bindings nested inside
-closures or code blocks are not file-scope and are ignored.
+string or boolean literal — any other value is a compile error. Bindings nested
+inside closures or code blocks are not file-scope and are ignored.
 
-The Atom feed variables below (`rheo-feed-title`, `rheo-feed-updated`) are an
-instance of this convention.
+The Atom feed variables below (`rheo-feed-title`, `rheo-feed-updated`,
+`rheo-feed-exclude`) are an instance of this convention.
 
 ## Atom feed (HTML)
 
@@ -136,26 +158,30 @@ feed_author   = "Jane Doe"            # optional; default "Rheo"
 ```
 
 Without `feed_base_url`, no feed is emitted. When set, the HTML build writes
-`build/html/feed.xml` with one `<entry>` per spine vertebra that declares a
-`rheo-feed-title`, and injects a `<link rel="alternate"
-type="application/atom+xml">` autodiscovery tag into every page's `<head>`.
+`build/html/feed.xml` with one `<entry>` per spine vertebra by default, and
+injects a `<link rel="alternate" type="application/atom+xml">` autodiscovery tag
+into every page's `<head>`.
 
 `feed_author` is an optional string that sets the feed-level `atom:author`
 (`<author><name>…</name></author>`). It defaults to `"Rheo"` when absent;
 XML-special characters are escaped automatically.
 
-Per-entry values are top-level `#let` bindings (string literals) in the
-vertebra:
+Per-entry values are top-level `#let` bindings in the vertebra:
 
 ```typst
 #let rheo-feed-title   = "My first post"
 #let rheo-feed-updated = "2026-01-15T00:00:00Z"
+#let rheo-feed-exclude = true
 ```
 
-- `rheo-feed-title` — entry title; **required** for a vertebra to appear in the
-  feed.
-- `rheo-feed-updated` — entry timestamp (RFC 3339); optional, falls back to the
-  source file's mtime.
+Every vertebra appears in the feed by default. All three variables are optional:
+
+- `rheo-feed-title` — overrides the entry title; defaults to the document title
+  from `#set document(title: ...)`.
+- `rheo-feed-updated` — overrides the entry timestamp (RFC 3339); defaults to the
+  document date from `#set document(date: ...)`, then the source file's mtime.
+- `rheo-feed-exclude` — the boolean `true` omits this vertebra from the feed (its
+  page is still built). Useful for cover/index pages.
 
 Each entry's `<content>` is chosen from the page, first match wins:
 
@@ -185,7 +211,7 @@ With no `<main>` or `rheo-feed-content` marker, the full body is used.
 Rheo rewrites these per format:
 - HTML → `<a href="another-section.html">`
 - EPUB → internal reference
-- PDF → plain text, or an internal section ref when the spine declares `merge`
+- PDF → an internal section ref (the spine is combined into one document)
 
 This is what makes the same source tree work as a static site, an EPUB, and a
 linked PDF.
@@ -242,13 +268,12 @@ The `@rheo/slides` package compiles a single `.typ` file to both a RevealJS HTML
 
 ### Spine config
 
-```toml
-[html.spine]
-vertebrae = ["slides.typ"]
+A single-file project needs no spine config at all — the directory-scan
+default already includes `slides.typ`. Give the PDF a title, if wanted:
 
+```toml
 [pdf.spine]
 title = "My Presentation"
-vertebrae = ["slides.typ"]
 ```
 
 ### PDF output
