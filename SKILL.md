@@ -136,6 +136,20 @@ Gotcha: a custom `style.css` **replaces** the default styles entirely — there
 is no merge. Copy the defaults from the rheo repo if you want to extend rather
 than override.
 
+## Footnotes (HTML/EPUB)
+
+By default the footnote counter **resets per page** in HTML and EPUB bundle
+output — each page starts its footnotes at 1 rather than continuing across the
+whole spine. Set `reset_footnotes = false` under `[html]` or `[epub]` to keep
+continuous numbering across pages:
+
+```toml
+[html]
+reset_footnotes = false   # continuous across pages (default true = reset per page)
+```
+
+Per-format, so HTML and EPUB can differ. PDF is unaffected.
+
 ## rheo-* variables
 
 Any top-level `#let rheo-<key> = <value>` in a vertebra is harvested at
