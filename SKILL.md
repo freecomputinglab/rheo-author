@@ -153,71 +153,92 @@ reset_footnotes = false   # continuous across pages (default true = reset per pa
 
 Per-format, so HTML and EPUB can differ. PDF is unaffected.
 
-## rheo-* variables
+## Feeds (`@rheo/feeds`)
 
-Any top-level `#let rheo-<key> = <value>` in a vertebra is harvested at
-compile time and exposed to plugins with the `rheo-` prefix stripped (so
-`rheo-feed-title` is read as `feed-title`). The right-hand side **must** be a
-string or boolean literal — any other value is a compile error. Bindings nested
-inside closures or code blocks are not file-scope and are ignored.
-
-The Atom feed variables below (`rheo-feed-title`, `rheo-feed-updated`,
-`rheo-feed-exclude`) are an instance of this convention.
-
-## Atom feed (HTML)
-
-Set `feed_base_url` under `[html]` to enable an Atom 1.0 feed:
-
-```toml
-[html]
-feed_base_url = "https://example.com"
-feed_author   = "Jane Doe"            # optional; default "Rheo"
-```
-
-Without `feed_base_url`, no feed is emitted. When set, the HTML build writes
-`build/html/feed.xml` with one `<entry>` per spine vertebra by default, and
-injects a `<link rel="alternate" type="application/atom+xml">` autodiscovery tag
-into every page's `<head>`.
-
-`feed_author` is an optional string that sets the feed-level `atom:author`
-(`<author><name>…</name></author>`). It defaults to `"Rheo"` when absent;
-XML-special characters are escaped automatically.
-
-Per-entry values are top-level `#let` bindings in the vertebra:
+Feeds are configured in Typst, not `rheo.toml`. `@rheo/feeds` emits Atom 1.0,
+RSS 2.0, and JSON Feed 1.1 from one config — the retired Rust generator did
+Atom only. Requires rheo >= 0.6.0 (the package asserts this itself and fails
+the build below that floor).
 
 ```typst
-#let rheo-feed-title   = "My first post"
-#let rheo-feed-updated = "2026-01-15T00:00:00Z"
-#let rheo-feed-exclude = true
+#import "@rheo/feeds:0.1.0": feed, configure, spine
+
+#configure(feeds: (
+  feed(
+    title: "My Site",
+    base-url: "https://example.com",
+    sources: (spine(),),
+  ),
+))
 ```
 
-Every vertebra appears in the feed by default. All three variables are optional:
+Call `configure` once, from any vertebra. Every spine vertebra becomes a
+candidate entry in `feed.xml` by default.
 
-- `rheo-feed-title` — overrides the entry title; defaults to the document title
-  from `#set document(title: ...)`.
-- `rheo-feed-updated` — overrides the entry timestamp (RFC 3339); defaults to the
-  document date from `#set document(date: ...)`, then the source file's mtime.
-- `rheo-feed-exclude` — the boolean `true` omits this vertebra from the feed (its
-  page is still built). Useful for cover/index pages.
+### Multiple feeds, multiple formats
 
-Each entry's `<content>` is chosen from the page, first match wins:
-
-1. the first `<main>` element;
-2. else the first element with class `rheo-feed-content`;
-3. else the whole `<body>`.
-
-To keep site chrome (header, footer, nav) out of feed entries, wrap the article
-in `<main>` and keep the chrome outside it:
+One `configure(...)` call can register several `feed(...)`s, each with its own
+`path` and, optionally, `format` (`"atom"` default, `"rss"`, `"json"`):
 
 ```typst
-#show: doc => {
-  site-header()
-  html.elem("main", doc)   // ← only this becomes the feed entry
-  site-footer()
-}
+#let posts = spine(filter: e => e.handle.starts-with("posts:"))
+
+#configure(feeds: (
+  feed(path: "feed.xml", title: "My Site", base-url: "https://example.com", sources: (posts,)),
+  feed(path: "rss.xml",  title: "My Site", base-url: "https://example.com", sources: (posts,), format: "rss"),
+))
 ```
 
-With no `<main>` or `rheo-feed-content` marker, the full body is used.
+Every page's `<head>` gets one autodiscovery `<link>` per feed.
+
+### Sources
+
+A source is a plain function `cfg => (entries)`. Two are built in:
+
+- `spine(filter:, select:)` — every spine vertebra by default; `filter` is a
+  predicate over `(handle, path, title)`, e.g. `spine(filter: e =>
+  e.handle.starts-with("posts:"))` to narrow to one directory.
+- `items(filter:, label-name:)` — entries any package or page contributes via
+  a `#metadata((...)) <feeds:item>` beacon (or the `item(...)` helper that
+  writes one for you). Reach for this only when there's no accessor to call
+  directly.
+
+`@rheo/rookery` notes are syndicated the direct way first: a hand-written
+source calls `ideas(tags:)` and reshapes its rows onto the entry shape (see
+the package readme's "Sourcing from another package" for the worked recipe).
+`#show: rookery.with(syndicate: true)` is the fallback — it makes each minted
+note page emit a `<feeds:item>` beacon for `items()` to pick up, for sources
+with no accessor to call.
+
+`content` (default `"html"`) splices the entry's own page into `<content>`;
+set it `none` when the entry's page isn't a compiled vertebra (a rookery note
+is minted, not compiled) or when the feed's `format` is `"json"` (required
+there — JSON Feed has no way to carry rheo's spliced-in page HTML).
+
+### Behaviour to get right
+
+- **`title` is required, with no fallback chain.** The retired generator fell
+  back from an explicit title to the HTML spine's own title to the project's
+  directory name; `feed(...)` panics on an empty title instead.
+- **An entry with no date is dropped, not defaulted.** Atom requires
+  `<updated>`, and Typst can't stat a compiled output file's mtime, so a
+  `spine()` entry with no `#set document(date: ...)` — and nothing else
+  supplying a date — silently never becomes a candidate. This is also how you
+  exclude a cover or index page from a feed: leave it undated.
+- **Never date a page with `datetime.today()`.** It resolves to whatever day
+  the build runs, so a syndicated page's timestamp changes on every rebuild.
+  Write a literal `datetime(year: ..., month: ..., day: ...)`.
+
+### Removed in 0.6.0: the old `[html]` feed config
+
+`[html] feed_base_url`, `feed_author`, `feed_title`, `[[html.feed_include]]`,
+and the per-vertebra `#let rheo-feed-title` / `rheo-feed-updated` /
+`rheo-feed-exclude` bindings are deleted from the engine outright, not
+deprecated. A build that still sets one now WARNS, naming the key (and, for
+the `.typ` bindings, the file and line); `rheo migrate` reports the same
+findings but does not rewrite them, since the old keys don't map onto
+`@rheo/feeds` config one-to-one. See the package readme's "Migrating from the
+retired Rust feed generator" for the full mapping.
 
 ## Relative linking between `.typ` files
 
