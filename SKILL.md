@@ -36,7 +36,7 @@ my-project/
 Defaults (applied when keys are omitted):
 
 ```toml
-version = "0.5.1"
+version = "0.6.0"
 content_dir = "./"
 build_dir   = "build"
 formats     = ["pdf", "html", "epub"]
@@ -46,6 +46,11 @@ title = "<project dir name>"
 ```
 
 Restrict outputs by trimming `formats`, e.g. `formats = ["html", "epub"]`.
+
+`version` must match the installed rheo. A mismatch WARNS (does not fail
+the build) naming both versions; run `rheo migrate` to update `rheo.toml`
+in place (add `--apply` to write the change — without it, `rheo migrate`
+only reports what it would do).
 
 ### Path resolution (load-bearing gotcha)
 
@@ -117,13 +122,14 @@ css_stylesheet = "./style.css"
 js_scripts     = "./index.js"
 ```
 
-Multiple bundles via array-of-tables (note: `css_stylesheets` plural here):
+Multiple bundles via array-of-tables (`css_stylesheet` stays singular in
+every block — there is no plural form):
 
 ```toml
 [[html.assets]]
-dest             = "tooltip"
-js_scripts       = "tooltip/index.js"
-css_stylesheets  = "tooltip/index.css"
+dest            = "tooltip"
+js_scripts      = "tooltip/index.js"
+css_stylesheet  = "tooltip/index.css"
 
 [[html.assets]]
 dest        = "annotations"
@@ -263,8 +269,135 @@ Typst Universe packages can ship web assets. Import normally:
 ```
 
 Rheo reads `[tool.rheo.html]` from the package's own `typst.toml` and pulls in
-its `js_scripts`, `css_stylesheets`, and `copy` entries automatically. Paths
+its `js_scripts`, `css_stylesheet`, and `copy` entries automatically. Paths
 there resolve relative to the package's location in the Typst cache.
+
+## Marrow (`.marrow.typ`)
+
+`content/.marrow.typ` is inlined at the Typst bundle root, outside every
+page. It is NOT a vertebra: no `.marrow.html` output, never in the spine,
+never in nav. Default filename is `.marrow.typ`; override with a top-level
+`marrow = "..."` key in `rheo.toml`, resolved against `content_dir`.
+
+It is the only place `#document(...)` and `#asset(...)` are legal — how
+extra output files get minted:
+
+```typst
+#document("extra/hello.html", format: "html", title: [Extra])[Hello from the bundle root.]
+#asset("extra/hello.txt", "root-level asset")
+```
+
+Call either from inside a vertebra and the build fails: `setting the
+document format is only supported in the bundle target`.
+
+Per-page formats only (`html`, `epub`). PDF combines its spine into one
+document, so marrow is skipped there entirely.
+
+### One page per registered item
+
+```typst
+#context {
+  for n in state("notes", ()).final() {
+    document("notes/" + n.name + ".html", format: "html", title: [Note])[#n.body]
+  }
+}
+```
+
+A top-level `#context` reading `state(...).final()` and calling
+`document()`/`asset()` in a loop is how marrow turns arbitrary registered
+data into one output per item — the same shape `@rheo/feeds`'s own
+`.marrow.typ` uses to mint every configured feed.
+
+### Package marrow
+
+A package can ship its own `.marrow.typ`; importing the package is enough
+for it to run, alongside the project's own marrow, not instead of it. Turn
+it off per format with `auto_detect_packages = false` (e.g. under `[html]`).
+
+### Gotchas
+
+- Paths inside marrow resolve against the **project root**, not
+  `content_dir`.
+- Typst can't list a directory — marrow finds things through `state`,
+  labels, or `sys.inputs.rheo-context`, never by scanning `content/`.
+- A `#show` rule inside marrow affects only what marrow itself mints, not
+  existing vertebrae.
+
+## Bundle-output primitives
+
+Most authors never write these directly — a package such as `@rheo/feeds`
+uses them so you don't have to. Reach for them only when building
+something no package already covers (want an Atom/RSS/JSON feed? use
+`@rheo/feeds` — see "Feeds" above, not this section).
+
+### Transclusion: `<rheo-content>`
+
+A marrow-minted asset can embed another page's compiled HTML with a
+placeholder, resolved after compilation (once real page HTML exists):
+
+```text
+<rheo-content page="notes/etal.html" select="main" as="escaped"/>
+```
+
+- `page` (required) — a compiled page's plugin-output-relative path.
+- `select` (optional) — a bare tag name (`main`) or leading-dot class
+  (`.rheo-content`); default cascade is `<main>` → `.rheo-content` →
+  `.rheo-feed-content` → whole `<body>`.
+- `as` (optional) — `escaped` (default; entity-escaped, for `<content
+  type="html">`), `raw` (verbatim, for `<content type="xhtml">`), or
+  `json` (escaped as a JSON string body, for a JSON Feed's
+  `content_html`).
+
+No Typst function does this: marrow runs *inside* the Typst compile, before
+any page HTML exists, so there is no HTML string to hand back yet.
+
+### Head contributions
+
+Two routes — `#set document(...)` alone can't reach `<head>` otherwise:
+
+- `<rheo-head>` wrapped around content anywhere in ONE page's body — its
+  children are hoisted into that page's own `<head>`, wrapper removed:
+
+  ```typst
+  #html.elem("rheo-head", html.elem("link", attrs: (rel: "canonical", href: "https://example.com/a.html")))
+  ```
+
+- `.rheo/head.html` minted from marrow — an HTML fragment (no
+  `<html>`/`<head>`/`<body>` wrapper) appended to EVERY page's `<head>`:
+
+  ```typst
+  #asset(
+    ".rheo/head.html",
+    "<link rel=\"alternate\" type=\"application/atom+xml\" href=\"https://example.com/feed.xml\" title=\"Site Feed\">",
+  )
+  ```
+
+HTML only. The only EPUB guarantee is that control assets stay out of the
+EPUB container — no head-injection behaviour is promised there.
+
+### Control assets: the `.rheo/` prefix
+
+Anything minted under `.rheo/` (e.g. `.rheo/head.html`) is a message from
+the bundle to rheo: consumed during compilation, never written to the
+build output. An unrecognized `.rheo/*` path is dropped with a warning,
+not a build failure.
+
+### End to end
+
+```typst
+// content/.marrow.typ
+#asset(
+  ".rheo/head.html",
+  "<link rel=\"alternate\" type=\"application/atom+xml\" href=\"https://example.com/feed.xml\" title=\"Site Feed\">",
+)
+#asset(
+  "feed.xml",
+  "<entry><rheo-content page=\"notes/etal.html\" as=\"escaped\"/></entry>",
+)
+```
+
+Mints `feed.xml` with `notes/etal.html`'s compiled `<main>` spliced in, and
+adds an autodiscovery `<link>` to every page's `<head>`.
 
 ## Slides (`@rheo/slides`)
 
