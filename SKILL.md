@@ -246,7 +246,12 @@ findings but does not rewrite them, since the old keys don't map onto
 `@rheo/feeds` config one-to-one. See the package readme's "Migrating from the
 retired Rust feed generator" for the full mapping.
 
-## Relative linking between `.typ` files
+## Cross-file references
+
+Three ways to reference across `.typ` files: relative path links, `<handle>`
+anchors, and `rheo-context()` for reading another vertebra's state from Typst.
+
+### Relative path links
 
 ```typst
 #link("./another-section.typ")[See another section]
@@ -260,6 +265,148 @@ Rheo rewrites these per format:
 This is what makes the same source tree work as a static site, an EPUB, and a
 linked PDF.
 
+### Labels and handle anchors
+
+Rheo does NOT rewrite or prefix authored Typst labels — they stay exactly as
+Typst defines them, in ONE flat global namespace across the whole spine. Two
+vertebrae defining the same label collide as an ordinary Typst duplicate-label
+error, same as within a single file.
+
+Separately, rheo synthesizes a `<handle>` anchor per vertebra (plus a
+`<handle.typ>` escape alias) so one vertebra can reference another by handle:
+
+```typst
+#link(<chapters:intro>)[nested page]
+@chapters:intro
+```
+
+These anchors are labeled `#figure` elements (`#metadata` and bare labels
+aren't cross-document-referenceable in Typst 0.15), hidden from render, with
+`@handle` shown as a link carrying the target vertebra's title. If a
+user-authored label already claims the canonical handle name, rheo silently
+skips injecting it — the vertebra stays reachable via its `<handle.typ>`
+escape form. An escape form colliding with anything else IS a hard build
+error naming the file and label.
+
+The whole spine compiles as ONE Typst document, so `query()`/
+`state(...).final()` see every vertebra — this is why handle references
+resolve with no post-processing step.
+
+A link to an AUTHORED label in another vertebra (not a `<handle>` anchor)
+resolves correctly too, even though rheo's own link-rewrite rule never
+touches it — that rule only rewrites `rheo-handle` figures. Typst's own
+bundle-target link machinery (not rheo) computes the right cross-page href
+and fragment for any label, wherever it's defined in the spine. Reach for a
+`<handle>` anchor anyway when you want the link's own text to be the target's
+title automatically (`@chapters:intro`); reach for a plain label when you
+already have your own text to show.
+
+### `rheo-context()`
+
+Rheo injects a zero-arg function into every vertebra:
+
+```typst
+#rheo-context().handle           // this file's handle, e.g. "chapters:intro"
+#rheo-context().spine-flat.len() // every clickable vertebra, flat, pre-order
+```
+
+Fields:
+- `handle` — this vertebra's own `:`-separated handle. The only per-file
+  field; everything else below is shared across the whole spine.
+- `spine` — the structured spine tree (`title`/`handle`/`path`/`children` per
+  node; a group node has `handle`/`path` `none`). `title` here is always
+  **path-derived** — never a vertebra's own `#set document(title: ...)`.
+- `spine-flat` — the flat pre-order list of clickable vertebrae, same
+  path-derived-title caveat.
+- `metadata-of` — a closure, `(handle) => dict`, reading another vertebra's
+  resolved `#set document(...)` values live (see below).
+- `rheo-version` — the compiling rheo's own semver string (e.g. `"0.6.0"`),
+  always present.
+- `target` / `ext` — output format name / file extension. Present for HTML
+  and EPUB; both ABSENT for PDF. Check `"target" in rheo-context()` before
+  reading either.
+
+None of these need `#context` EXCEPT `metadata-of` — they read straight off
+`sys.inputs`.
+
+**Passing it to a package.** A package can't see a vertebra's local
+`rheo-context()` implicitly — Typst functions capture their definition scope,
+not the call site — so hand it in explicitly:
+
+```typst
+#import "@rheo/somepackage": template
+#show: template.with(ctx: rheo-context())
+```
+
+**Detecting a rheo build.** `sys.inputs.rheo-context` (a plain dict, not a
+function) is the file-independent half of the above — no `handle`, everything
+else. Use it to turn a native `typst compile` into a friendly error:
+
+```typst
+#let ctx = if "rheo-context" in sys.inputs { rheo-context() } else {
+  panic("Compile this with Rheo — https://rheo.ohrg.org")
+}
+```
+
+**Detecting rheo's version — three states, not two:**
+- `"rheo-context" not in sys.inputs` — no rheo at all, plain `typst compile`.
+  Not an error; this is a package's own feature-detect path.
+- `"rheo-context" in sys.inputs` but no `rheo-version` key — a rheo older
+  than the release that added the key.
+- `rheo-version` present — compare it and decide.
+
+#### `metadata-of`: reading another vertebra's real metadata
+
+`metadata-of` reads a vertebra's *resolved* `#set document(...)` values —
+title, author, description, keywords, date — off a per-vertebra beacon, live,
+after Typst has resolved the whole style chain. It's a dict field, not a
+method, so call it with the extra parens, and it **requires `#context`** (it
+calls `query()` internally) — the one field of `rheo-context()` that does,
+since everything else reads a plain `sys.inputs` dict:
+
+```typst
+#context [
+  #let m = (rheo-context().metadata-of)("chapters:intro")
+  #m.at("title", default: [Untitled])
+]
+```
+
+`title`/`description` come back as real Typst content (not flattened
+strings) — a nav built from this can render a formatted title, not just
+plain text. `author`/`keywords` are always arrays; `date` is a real
+`datetime`. A key the vertebra never set is omitted, not `none`. Returns
+`(:)` for a handle with no beacon.
+
+Most authoring forms resolve correctly — a title set via an imported `#show:`
+template, a non-literal expression, or multiple `#set document(...)` rules —
+because the beacon reads the live, fully-resolved value instead of
+re-parsing source text.
+
+**`rheo-context().spine`/`spine-flat` titles do NOT use this** — they stay
+path-derived always. Read a vertebra's real authored title via `metadata-of`
+instead of `spine-flat[...].title`.
+
+**Combined PDF has no per-vertebra metadata.** PDF's default layout puts
+every vertebra into one shared `#document(...)` block, so there's no
+well-defined "this vertebra's own metadata" — `metadata-of` returns `(:)` for
+every handle there. By design, not a bug.
+
+**Gotcha: a title set inside a bounded `#{ }`/`#[ ]` block is invisible to
+`metadata-of`.** The vertebra's own compiled `<title>`/PDF `/Title` is
+unaffected — Typst's document-info collection is unscoped — but the beacon
+reads `document.title` via `#context`, appended once after the vertebra's own
+body, and that read can't see a `set` whose bounded block already closed
+earlier in the same file. So `metadata-of` and any `@handle` reference to
+that vertebra silently fall back to the path-derived title instead. A
+`#show: template` rule is unaffected (it has no closing brace of its own —
+it applies through the end of the enclosing block, where the beacon lives
+too). Give a title at the vertebra's top level, or via `#show:`, if it needs
+to be visible to another vertebra's metadata read or a handle anchor.
+
+**Reserved label prefix:** the beacon is labelled `<rheo-meta:handle>`. An
+authored label starting with `rheo-meta:` is a hard build error naming the
+file and label.
+
 ## Packages
 
 Typst Universe packages can ship web assets. Import normally:
@@ -271,6 +418,57 @@ Typst Universe packages can ship web assets. Import normally:
 Rheo reads `[tool.rheo.html]` from the package's own `typst.toml` and pulls in
 its `js_scripts`, `css_stylesheet`, and `copy` entries automatically. Paths
 there resolve relative to the package's location in the Typst cache.
+
+### `[tool.rheo] min_version`
+
+A package declares the oldest rheo it works with:
+
+```toml
+[tool.rheo]
+min_version = "0.6.0"
+```
+
+A plain floor, no ranges. A running rheo older than this FAILS the build,
+naming the offending package. Omitting the key means no check at all. Only
+enforced by rheo versions that have the check themselves — a package that
+must fail cleanly even on an ancient rheo should also `assert` a floor in its
+own Typst using `rheo-context().rheo-version` (see `rheo-context()` above),
+since the manifest check can't protect against a rheo too old to read it.
+
+Gotcha: `[tool.rheo]` must be the LAST table in the file. A
+`[tool.rheo.<format>]` subtable declared after it would capture `min_version`
+into that subtable instead.
+
+## Notes (`@rheo/rookery`)
+
+Zettelkasten-style atomic notes — interlinked, transcludable, with their own
+minted pages under rheo.
+
+```typst
+#import "@rheo/rookery:0.4.0": idea, window
+
+#idea("etal")[A pinned note — id is always `idea:etal`.]
+#window("etal")   // transcludes it inline, foldable
+@idea:etal        // terse ref — renders the note's title, linked
+```
+
+No `ctx:` parameter and no template required to use `idea`/`window` — rheo
+needs nothing extra. `#show: rookery.with(...)` (optional) wires up
+`@idea:etal` to render the note's title instead of a bare figure number, plus
+prefix/theme/bibliography config; see the package readme for the full option
+set. `#note(...)`/`#todo(...)` are sugar over `idea` that prepend a `note`/
+`todo` tag.
+
+Note ids are FLAT and globally unique (`idea:name`, no per-file prefix) — a
+note keeps its id when it moves between files, and a duplicate id is a build
+error naming it. `#ideas()` (inside `#context`) hands back every note as
+data — `id`/`name`/`title`/`text`/`tags`/`body`/`href`/`page`/`minted`/
+`updated` per entry — the seam for a custom index, feed, or search over the
+corpus; see "Sourcing from another package" in the Feeds section above for
+the worked recipe feeding `@rheo/feeds` from it.
+
+Full docs: `rheo-packages/rookery/<version>/readme.md`; a worked multi-page
+example lives at `rookery.ohrg.org`.
 
 ## Marrow (`.marrow.typ`)
 
