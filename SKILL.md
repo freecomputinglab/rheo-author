@@ -58,7 +58,7 @@ Once `content_dir` is set, `build_dir` **and all spine globs** resolve relative
 to `content_dir`, not the project root. Asset `copy` paths stay relative to the
 project root. Mix these up and files land in the wrong place.
 
-## Spines — directory-scan default, exclude, sections
+## Spines — directory-scan default, exclude, include, sections
 
 With no config, the spine is built from `content_dir`'s own directory
 structure: every `.typ` file, ordered alphabetically per directory level. A
@@ -81,9 +81,25 @@ name    = "chapters"           # virtual directory, no files moved on disk
 include = ["ch-*.typ"]         # matched files get handle `chapters:<stem>`
 ```
 
-`[[spine.section]]` nests via `[[spine.section.section]]`. When `include` lists
-several globs, matches are gathered in glob order (lexicographic within one
-glob) — list globs in the order you want when you need explicit control.
+`[[spine.section]]` nests via `[[spine.section.section]]`. When *this* `include`
+(the section's own field) lists several globs, matches are gathered in glob
+order (lexicographic within one glob) — list globs in the order you want when
+you need explicit control.
+
+`[spine] include` is a **different key with the same name**, set directly on
+`[spine]`/`[<format>.spine]` rather than inside a `[[spine.section]]` block. It
+reorders the scan in place instead of grouping into a virtual directory — no
+new handle prefix, no path change, just a different order — and drops any file
+none of its patterns match (so it also replaces a same-scope `exclude`):
+
+```toml
+[spine]
+include = ["index.typ", "install.typ", "ideas.typ", "flights.typ"]
+```
+
+`include` and `section` are rejected together on one table — pick one; an
+`include` pattern matching no file is also a build error. First version
+reorders flat, top-level files only, not within a nested content directory.
 
 ```toml
 [epub.spine]
