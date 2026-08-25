@@ -461,7 +461,7 @@ Zettelkasten-style atomic notes — interlinked, transcludable, with their own
 minted pages under rheo.
 
 ```typst
-#import "@rheo/rookery:0.4.0": idea, window
+#import "@rheo/rookery:0.5.0": idea, window
 
 #idea("etal")[A pinned note — id is always `idea:etal`.]
 #window("etal")   // transcludes it inline, foldable
@@ -472,16 +472,38 @@ No `ctx:` parameter and no template required to use `idea`/`window` — rheo
 needs nothing extra. `#show: rookery.with(...)` (optional) wires up
 `@idea:etal` to render the note's title instead of a bare figure number, plus
 prefix/theme/bibliography config; see the package readme for the full option
-set. `#note(...)`/`#todo(...)` are sugar over `idea` that prepend a `note`/
-`todo` tag.
+set.
+
+`tagged-idea(tag, value: none)` returns an `#idea` variant that prepends a tag,
+so a project builds its own constructors — two lines get the familiar pair
+back:
+
+```typst
+#let note = tagged-idea("note")
+#let todo = tagged-idea("todo")
+```
+
+There is no exported `#note`/`#todo` as of 0.5.0; the factory replaced them.
+
+A note's tags are a DICTIONARY — keys are tag names, values are arbitrary Typst
+values, `none` for a plain tag — and `tags:` accepts `none`, a string, an array
+of strings or a dictionary, all normalizing to that one shape. Tags are
+unordered. `show-tags:` renders pills for flat tags only (value `none`), while
+`.idea-tag-<key>` classes cover every key.
 
 Note ids are FLAT and globally unique (`idea:name`, no per-file prefix) — a
 note keeps its id when it moves between files, and a duplicate id is a build
 error naming it. `#ideas()` (inside `#context`) hands back every note as
 data — `id`/`name`/`title`/`text`/`tags`/`body`/`href`/`page`/`minted`/
-`updated` per entry — the seam for a custom index, feed, or search over the
-corpus; see "Sourcing from another package" in the Feeds section above for
-the worked recipe feeding `@rheo/feeds` from it.
+`updated` per entry, where `tags` is a flat array of every tag NAME — the seam
+for a custom index, feed, or search over the corpus; see "Sourcing from another
+package" in the Feeds section above for the worked recipe feeding
+`@rheo/feeds` from it. Tag VALUES are deliberately kept off those rows: reach
+for `tag-data()` (bulk, id → dict) or `tag-value(name, key, default: none)`.
+
+Two sibling packages build on that tag dictionary: `@rheo/rookery-dates`
+(`scheduled`/`deadline` dates, merged in through `tags:`) and
+`@rheo/rookery-todos` (todos, epics and a dependency DAG).
 
 Full docs: `rheo-packages/rookery/<version>/readme.md`; a worked multi-page
 example lives at `rookery.ohrg.org`.
