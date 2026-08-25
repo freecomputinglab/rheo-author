@@ -283,22 +283,29 @@ retired Rust feed generator" for the full mapping.
 
 ## Cross-file references
 
-Three ways to reference across `.typ` files: relative path links, `<handle>`
-anchors, and `rheo-context()` for reading another vertebra's state from Typst.
+Three ways to reference across `.typ` files: `<handle>` anchors — the form to
+reach for — authored Typst labels, and the older relative path links. Separately,
+`rheo-context()` reads another vertebra's state from Typst.
 
-### Relative path links
+### Handles
+
+Every vertebra gets a handle, and you link to it with ordinary Typst label
+syntax:
 
 ```typst
-#link("./another-section.typ")[See another section]
+#link(<chapters:intro>)[nested page]
+@chapters:intro
 ```
 
-Rheo rewrites these per format:
-- HTML → `<a href="another-section.html">`
-- EPUB → internal reference
-- PDF → an internal section ref (the spine is combined into one document)
+A handle is derived from the file's path relative to `content_dir`:
 
-This is what makes the same source tree work as a static site, an EPUB, and a
-linked PDF.
+- Root-level file → bare handle: `content/intro.typ` → `<intro>`.
+- Nested file → path-qualified with `:` as the separator:
+  `content/chapters/intro.typ` → `<chapters:intro>`,
+  `content/a/b/notes.typ` → `<a:b:notes>`.
+
+`:` and `.` are valid Typst label characters and `/` is not, which is why `:` is
+the separator.
 
 ### Labels and handle anchors
 
@@ -308,12 +315,8 @@ vertebrae defining the same label collide as an ordinary Typst duplicate-label
 error, same as within a single file.
 
 Separately, rheo synthesizes a `<handle>` anchor per vertebra (plus a
-`<handle.typ>` escape alias) so one vertebra can reference another by handle:
-
-```typst
-#link(<chapters:intro>)[nested page]
-@chapters:intro
-```
+`<handle.typ>` escape alias) — the anchor the handle links above resolve
+against.
 
 These anchors are labeled `#figure` elements (`#metadata` and bare labels
 aren't cross-document-referenceable in Typst 0.15), hidden from render, with
@@ -335,6 +338,25 @@ and fragment for any label, wherever it's defined in the spine. Reach for a
 `<handle>` anchor anyway when you want the link's own text to be the target's
 title automatically (`@chapters:intro`); reach for a plain label when you
 already have your own text to show.
+
+### Relative path links
+
+The pre-0.4.0 form, pointing at the target's path rather than its handle:
+
+```typst
+#link("./another-section.typ")[See another section]
+```
+
+It still compiles, and you will meet it in older projects, but the handle form
+above is what to write now — `rheo migrate` rewrites path links into handle links
+for any project declaring a version below 0.4.0. Rheo rewrites either per format:
+
+- HTML → `<a href="another-section.html">`
+- EPUB → internal reference
+- PDF → an internal section ref (the spine is combined into one document)
+
+This is what makes the same source tree work as a static site, an EPUB, and a
+linked PDF.
 
 ### `rheo-context()`
 
