@@ -97,8 +97,12 @@ exclude = ["drafts/**"]        # globs relative to content_dir, omitted from eve
 
 [[spine.section]]
 name    = "chapters"           # virtual directory, no files moved on disk
+title   = "The Chapters"       # display only; defaults to a prettified `name`
 include = ["ch-*.typ"]         # matched files get handle `chapters:<stem>`
 ```
+
+`name` is the handle segment and the sibling sort key — it behaves like a
+directory name — while `title` is display only.
 
 `[[spine.section]]` nests via `[[spine.section.section]]`. When *this* `include`
 (the section's own field) lists several globs, matches are gathered in glob
@@ -215,6 +219,24 @@ reset_footnotes = false   # continuous across pages (default true = reset per pa
 ```
 
 Per-format, so HTML and EPUB can differ. PDF is unaffected.
+
+## EPUB metadata
+
+Two more keys under `[epub]`, both optional:
+
+```toml
+[epub]
+identifier = "urn:isbn:9780000000000"
+date       = 2024-01-24T00:00:00Z
+```
+
+Left out, rheo generates a fresh `urn:uuid:...` identifier per build and emits no
+`dc:date` element at all. Set `identifier` when distributing revisions of the same
+book, so reading systems recognise them as one work across updates.
+
+Gotcha: `date` must be a full TOML offset date-time. Rheo parses it as RFC 3339,
+so a bare `2024-01-24` fails that parse and is **silently dropped** rather than
+erroring.
 
 ## Feeds (`@rheo/feeds`)
 
@@ -401,6 +423,10 @@ Fields:
   resolved `#set document(...)` values live (see below).
 - `rheo-version` — the compiling rheo's own semver string (e.g. `"0.6.0"`),
   always present.
+- `reset-footnotes` — the resolved per-format footnote-reset toggle, a plain
+  `bool`. Always present, every format including PDF, since it's a resolved
+  default rather than something format-gated — though it only ever takes effect
+  on HTML/EPUB, a combined PDF having no per-page boundary to reset at.
 - `target` / `ext` — output format name / file extension. Present for HTML
   and EPUB; both ABSENT for PDF. Check `"target" in rheo-context()` before
   reading either.
@@ -614,7 +640,9 @@ data into one output per item — the same shape `@rheo/feeds`'s own
 
 A package can ship its own `.marrow.typ`; importing the package is enough
 for it to run, alongside the project's own marrow, not instead of it. Turn
-it off per format with `auto_detect_packages = false` (e.g. under `[html]`).
+it off per format with `auto_detect_packages = false` (e.g. under `[html]`), or
+for every format at once by setting the same key at the top level of
+`rheo.toml`. Either scope governs both package assets and package marrow.
 
 ### Gotchas
 
