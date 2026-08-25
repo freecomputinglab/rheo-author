@@ -803,7 +803,16 @@ The `@rheo/slides` package compiles a single `.typ` file to both a RevealJS HTML
 ]
 ```
 
-`title` is optional. Omit for a heading-free slide.
+- `title` (default `auto`) — the deck's title bar is **sticky**: it is
+  repopulated on every slide change from the current section's title, so a slide
+  naming none keeps showing the last one that did. That's what you want for a run
+  of slides belonging to one part of a talk. Pass `title: none` to clear the bar.
+- `transition` (default `auto`) — per-slide override, emitted as
+  `data-transition` on that section. `auto` or `none` inherits the deck's; any
+  other value must be one of the deck transition names or the build fails naming
+  it.
+- `inline` (default `false`) — whether the slide's body is also typeset in the
+  PDF, beneath its marker (see PDF output).
 
 ### Template
 
@@ -819,14 +828,27 @@ The `@rheo/slides` package compiles a single `.typ` file to both a RevealJS HTML
 )
 ```
 
-- `theme` — any built-in RevealJS theme name
-- `transition` — `none`, `fade`, `slide`, `convex`, `concave`, `zoom`
-- `first-slide` — arbitrary Typst content; renders as the opening slide
+- `theme` (default `"black"`) — validated against a fixed list, and an unknown
+  name FAILS the build rather than falling back: `beige`, `black`,
+  `black-contrast`, `blood`, `dracula`, `league`, `moon`, `night`, `serif`,
+  `simple`, `sky`, `solarized`, `white`, `white-contrast`.
+- `transition` (default `none`) — `none`, `fade`, `slide`, `convex`, `concave`,
+  `zoom`. Left unset, RevealJS's own default applies.
+- `first-slide` (default `none`) — arbitrary Typst content; renders as the
+  opening slide.
+- `title` (default `none`) — the deck's title, seeding the title bar for every
+  slide after the cover until a `slide(title: ...)` replaces it. With
+  `first-slide` omitted, the opening slide becomes a level-1 heading holding this
+  instead.
+
+**One of `first-slide` or `title` is required** — the template asserts as much
+rather than producing a coverless deck.
 
 ### Spine config
 
 A single-file project needs no spine config at all — the directory-scan
-default already includes `slides.typ`. Give the PDF a title, if wanted:
+default already picks the file up whatever it's called. Give the PDF a title,
+if wanted:
 
 ```toml
 [pdf.spine]
@@ -835,7 +857,29 @@ title = "My Presentation"
 
 ### PDF output
 
-Each `slide` renders as a headed section on standard paper. `first-slide` becomes a title page. Suitable as a printed script or handout.
+The PDF is a script for the person giving the talk, not a printed copy of the
+deck. Each `slide` call renders as a small red `SLIDE` marker in the flow of the
+prose — telling you where to advance — and the slide's own body is left OUT, on
+the reasoning that a slide is a prompt for what you're about to say rather than
+part of the script. Pass `inline: true` on a slide whose body you do want typeset
+beneath its marker.
+
+This is why one file can carry prose the deck never shows: anything outside a
+`#slide[...]` call is script-only, the deck being assembled from the slide
+sections alone.
+
+### One file, paper and deck
+
+Shadow `slide` on a global boolean so the non-presentation build emits nothing
+per call:
+
+```typst
+#let is-presentation = false
+#let slide = if is-presentation { slide } else { (..args) => [] }
+```
+
+The same boolean drives any other conditional styling, e.g.
+`#set par(leading: if is-presentation { 0.65em } else { 1.3em })`.
 
 ### Customising RevealJS CSS
 
@@ -870,6 +914,9 @@ Common overrides:
 .reveal .slides figcaption {
   border-top: 1px solid color-mix(in srgb, var(--r-main-color) 25%, var(--r-background-color));
 }
+
+/* The sticky title bar — appended to .reveal as .slide-title-bar */
+.reveal .slide-title-bar { font-size: 0.5em; opacity: 0.6; }
 ```
 
 ## When to hand off to typst-author
