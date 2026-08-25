@@ -276,6 +276,25 @@ One `configure(...)` call can register several `feed(...)`s, each with its own
 
 Every page's `<head>` gets one autodiscovery `<link>` per feed.
 
+### `feed(...)` fields
+
+- `title` (required) — non-empty string; doubles as the `title=` on each
+  autodiscovery link.
+- `base-url` (required) — absolute URL, scheme included. Prefixes an entry's
+  `page`, and is the feed's own `rel="alternate"` link.
+- `sources` (required) — array of at least one source function.
+- `path` (default `"feed.xml"`) — where the feed is written, relative to the HTML
+  build directory.
+- `author` (default `"Rheo"`) — feed-level author, inherited by any entry naming
+  none of its own.
+- `subtitle` (default `none`).
+- `format` (default `"atom"`) — `"atom"`, `"rss"`, or `"json"`.
+- `content` (default `"html"`) — `"html"` and `"xhtml"` splice the entry's own
+  page in via transclusion; `none` omits the body and leaves `summary` to stand
+  in. `"xhtml"` (verbatim, for `<content type="xhtml">`) is Atom-only.
+- `limit` (default `none`) — positive integer capping how many entries the feed
+  carries, or `none` for all of them.
+
 ### Sources
 
 A source is a plain function `cfg => (entries)`. Two are built in:
@@ -288,6 +307,11 @@ A source is a plain function `cfg => (entries)`. Two are built in:
   writes one for you). Reach for this only when there's no accessor to call
   directly.
 
+A built-in source takes its options and *returns* the source, so call it as
+`spine(filter: ...)`, never `spine.with(filter: ...)` — the latter yields a
+function that then refuses the positional `cfg` and fails with
+`error: unexpected argument`.
+
 `@rheo/rookery` notes are syndicated the direct way first: a hand-written
 source calls `ideas(tags:)` and reshapes its rows onto the entry shape (see
 the package readme's "Sourcing from another package" for the worked recipe).
@@ -299,6 +323,30 @@ with no accessor to call.
 set it `none` when the entry's page isn't a compiled vertebra (a rookery note
 is minted, not compiled) or when the feed's `format` is `"json"` (required
 there — JSON Feed has no way to carry rheo's spliced-in page HTML).
+
+### Entry fields
+
+What a source hands back per entry. Only `title` is mandatory on the way in; the
+package type-checks the rest and names the offending field rather than failing
+inside the serializer.
+
+- `title` (required) — string or content.
+- `page` / `url` — one of the two required. `page` is relative to the HTML build
+  directory and gets joined onto the feed's `base-url`; `url` is an absolute URL
+  given directly.
+- `published` / `updated` — one of the two required. Real
+  `datetime(year:, month:, day:)` values, never strings. `updated` falls back to
+  `published` where only that is given.
+- `id` (defaults to the entry's `url`) — stable, globally unique string. It need
+  not be a URL; where it isn't, an RSS `guid` is emitted with
+  `isPermaLink="false"`.
+- `select` (default `none`) — region selector for this entry's body, passed
+  through to the same transclusion mechanism as `<rheo-content select="...">`.
+- `summary` (default `none`) — plain text, emitted ALONGSIDE the body rather than
+  instead of it.
+- `categories` (default `()`) — array of strings, even for a single tag:
+  `("note",)` and never `"note"`.
+- `author` (defaults to the feed's `author`) — a plain name.
 
 ### Behaviour to get right
 
@@ -313,6 +361,14 @@ there — JSON Feed has no way to carry rheo's spliced-in page HTML).
 - **Never date a page with `datetime.today()`.** It resolves to whatever day
   the build runs, so a syndicated page's timestamp changes on every rebuild.
   Write a literal `datetime(year: ..., month: ..., day: ...)`.
+- **RSS maps rather than drops.** It carries one date per item, so `pubDate`
+  takes `published` where there is one and `updated` otherwise, and an author is
+  emitted as `<dc:creator>` rather than `<author>` (RSS requires `<author>` to
+  hold an email address).
+- **Within one date, entries keep their source's order.** Spine dates are
+  day-granular — one `#set document(date: ...)` per vertebra — so two posts on
+  one day are common. Give them distinct dates rather than relying on source
+  order.
 
 ### Removed in 0.6.0: the old `[html]` feed config
 
