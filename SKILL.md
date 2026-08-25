@@ -147,6 +147,28 @@ copy = ["images/**"]
 
 Directory hierarchy is preserved in the output.
 
+## Fonts
+
+Rheo embeds its own copy of the Typst compiler, so it resolves fonts itself
+rather than deferring to any `typst` binary or font cache already on the system.
+Alongside system fonts it autoscans a `fonts` directory at the **project root**
+(not `content_dir`).
+
+Point it elsewhere with the top-level `font_dirs` key, resolved relative to the
+project root unless absolute:
+
+```toml
+font_dirs = ["fonts", "custom/typefaces"]
+```
+
+Gotcha: setting `font_dirs` switches the automatic `fonts` autoscan OFF. If you
+still want `fonts` searched, list it explicitly — which is why the example above
+names it first.
+
+The repeatable `--font-dir <dir>` flag on `compile` and `watch` appends further
+directories on top of whatever `font_dirs` (or the autoscan) already resolved. It
+appends; it never replaces.
+
 ## Custom JS/CSS for HTML
 
 Single bundle (note: `css_stylesheet` is singular here):
