@@ -15,7 +15,26 @@ delegate to the `typst-author` skill.
 - `rheo init <dir>` — scaffold a new project (works in empty dirs; ignores `.git`/`.jj`).
 - `rheo compile <path>` — one-shot build of all configured formats.
 - `rheo watch <path> [--open]` — dev server with rebuild on change.
-- Flags: `--config <path>`, `--build-dir <path>`.
+- `rheo clean [path]` — delete a project's build artifacts. Path defaults to `.`.
+- `rheo migrate <path> [--apply]` — upgrade an older project; dry run without `--apply`.
+
+Flags on both `compile` and `watch`:
+
+- `--config <path>` / `--build-dir <path>` — override the config file and the
+  output directory. `clean` takes these two as well.
+- `--pdf` / `--html` / `--epub` — build that format only; one flag per registered
+  format plugin, so `rheo watch my-project --html --epub --open` skips PDF. The
+  CLI counterpart to trimming `formats` in `rheo.toml`.
+- `--font-dir <dir>` — repeatable; appends to whatever the `fonts` autoscan or the
+  `font_dirs` config key already resolved.
+- `--metadata-two-pass` — recompile once more, only if needed, so a
+  `#set document(title: ...)` written inside a bounded code block is still visible
+  to cross-vertebra `metadata-of` and `@handle` reads.
+- `--emit-bundle-source` — write each plugin's synthesized bundle source to
+  `<build_dir>/<plugin>/.rheo-bundle.typ`. A debug artifact, never an input; useful
+  for seeing the Typst rheo actually generates.
+
+`--open` is watch-only.
 
 `rheo init` scaffolds:
 
@@ -417,7 +436,10 @@ that vertebra silently fall back to the path-derived title instead. A
 `#show: template` rule is unaffected (it has no closing brace of its own —
 it applies through the end of the enclosing block, where the beacon lives
 too). Give a title at the vertebra's top level, or via `#show:`, if it needs
-to be visible to another vertebra's metadata read or a handle anchor.
+to be visible to another vertebra's metadata read or a handle anchor. Where
+restructuring the file isn't an option, `--metadata-two-pass` on `compile` or
+`watch` recompiles once more to resolve such a title anyway — an escape hatch,
+not a substitute for setting the title somewhere the beacon can see it.
 
 **Reserved label prefix:** the beacon is labelled `<rheo-meta:handle>`. An
 authored label starting with `rheo-meta:` is a hard build error naming the
