@@ -6,7 +6,7 @@ priority: 1
 labels:
 - feat-auto-index
 deps: []
-closed: false
+closed: true
 ---
 `SKILL.md` is what teaches an agent rheo's author-facing surface, and it will be
 wrong the moment `[spine] auto_index` lands in rheo.

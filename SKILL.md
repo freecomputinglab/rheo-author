@@ -82,10 +82,30 @@ project root. Mix these up and files land in the wrong place.
 With no config, the spine is built from `content_dir`'s own directory
 structure: every `.typ` file, ordered alphabetically per directory level. A
 subdirectory with a landing file (`index.typ`, or `<dirname>.typ`) gets its own
-clickable page; without one it becomes a non-clickable group titled from the
-directory name (a leading numeric prefix like `01-intro/` orders it but is
-stripped from the title only — the raw name, prefix included, stays in the
-handle).
+clickable page; without one, `[spine] auto_index` (default `true`) synthesizes
+a landing page for it instead of leaving a non-clickable group node — see
+"Directory indexes" just below.
+
+### Directory indexes: `auto_index` and `rheo-index()`
+
+`auto_index` (default `true`, under `[spine]` or a per-format
+`[<format>.spine]`, same field-by-field fallback as `exclude`/`prelude`) is why
+a directory needs no landing file of its own: a subdirectory with children but
+no `index.typ`/`<dirname>.typ` gets a synthesized landing page whose whole body
+is a call to the injected `rheo-index()` function (see "`rheo-index()`" under
+Cross-file references below) — a list of links to that directory's own
+children, read from the spine tree. **Do not hand-write an `index.typ` whose
+only job is to list the directory's own files** — that's exactly the work
+`auto_index` replaces; style the listing instead (see `rheo-index()`) rather
+than replicating it by hand.
+
+Set `auto_index = false` to restore the pre-`auto_index` behavior: such a
+directory becomes a non-clickable group node again, titled from the directory
+name (a leading numeric prefix like `01-intro/` orders it but is stripped from
+the title only — the raw name, prefix included, stays in the handle). There is
+no per-directory opt-out. A directory left empty by `exclude` is still dropped
+entirely either way — `auto_index` only decides what happens to one that has
+children.
 
 Two knobs reshape this, both under a global `[spine]` table or a per-format
 `[pdf.spine]`/`[html.spine]`/`[epub.spine]` override (per-format overrides are
@@ -570,6 +590,25 @@ not a substitute for setting the title somewhere the beacon can see it.
 **Reserved label prefix:** the beacon is labelled `<rheo-meta:handle>`. An
 authored label starting with `rheo-meta:` is a hard build error naming the
 file and label.
+
+### `rheo-index()`
+
+Every vertebra also gets an injected `rheo-index()` function — the default
+renderer for a synthesized directory-index page (`[spine] auto_index`,
+default `true`; see "Directory indexes" under Spines above). Called with no
+arguments, it reads the recursive `rheo-context().spine` tree (not
+`spine-flat`, which excludes group nodes) for the current page's own
+children, and renders a list of links to them.
+
+A project styles its own directory indexes once, instead of writing an
+`index.typ` per directory, by binding its own `rheo-index()` in `[spine]
+prelude` — the prelude is spliced in after rheo's own `rheo-index()` import,
+so a later binding shadows it for every vertebra:
+
+```typst
+// _lib/prelude.typ
+#let rheo-index() = [ ...custom listing... ]
+```
 
 ## Packages
 
